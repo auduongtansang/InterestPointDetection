@@ -1,0 +1,8 @@
+.vs/
+x64/
+*.jpg
+*.png
+*.bmp
+*.dll
+*.ini
+InterestPointDetection/x64/
