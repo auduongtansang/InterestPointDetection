@@ -18,9 +18,18 @@
     <ClCompile Include="Convolution.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="InterestPointDetection.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Source.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Convolution.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="InterestPointDetection.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
