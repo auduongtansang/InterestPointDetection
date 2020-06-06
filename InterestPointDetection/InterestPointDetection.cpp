@@ -198,7 +198,7 @@ int InterestPointDetection::detectBlob(const Mat& src, Mat& dst, double sigma, d
 	return 1;
 }
 
-int InterestPointDetection::detectDOG(const Mat& src, Mat& dst, vector<keypoint> keypoints, double sigma, double coef, double cth, double eth)
+int InterestPointDetection::detectDOG(const Mat& src, Mat& dst, vector<keypoint>& keypoints, double sigma, double coef, double cth, double eth)
 {
 	//Nếu ảnh input rỗng => không làm gì hết
 	if (src.empty())
@@ -347,7 +347,7 @@ int InterestPointDetection::detectDOG(const Mat& src, Mat& dst, vector<keypoint>
 								int originalX = int(round(j * rescale));
 								int originalY = int(round(i * rescale));
 
-								keypoint key{ oct, k, i, j };
+								keypoint key{ double(oct), sig[oct][k], double(i), double(j) };
 								keypoints.push_back(key);
 
 								circle(dst, Point(originalX, originalY), int(ceil(sig[oct][k] * sqrt2 * rescale)), Scalar(0, 0, 255));
@@ -361,6 +361,140 @@ int InterestPointDetection::detectDOG(const Mat& src, Mat& dst, vector<keypoint>
 		scaleRow = int(round(scaleRow * 0.5));
 		scaleCol = int(round(scaleCol * 0.5));
 		rescale *= 2;
+	}
+
+	return 1;
+}
+
+int InterestPointDetection::extractSIFT(const Mat& src, const vector<keypoint>& keypoints, vector<descriptor>& descriptors)
+{
+	descriptors.resize(0);
+	int num = int(keypoints.size());
+
+	vector<int> orientations(num);
+
+	for (int key = 0; key < num; key++)
+	{
+		int oct = int(round(keypoints[key][0]));
+		double sig = keypoints[key][1];
+		int y = int(round(keypoints[key][2]));
+		int x = int(round(keypoints[key][3]));
+
+		Mat scale, Gaussian;
+		resize(src, scale, Size(int(round(src.cols * pow(2, -oct + 1))), int(round(src.rows * pow(2, -oct + 1)))));
+		GaussianBlur(scale, Gaussian, Size(0, 0), sig);
+
+		//Lấy vùng ảnh xung quanh keypoint
+		Mat win = Gaussian(Range(y - 8, y + 8), Range(x - 8, x + 8));
+		int wrow = win.rows, wcol = win.cols;
+
+		//Tạo ma trận trọng số
+		Mat weights = getGaussianKernel(wrow, 1.5 * sig).t() * getGaussianKernel(wcol, 1.5 * sig);
+
+		//Tính đạo hàm theo phương
+		Mat dX, dY;
+
+		Convolution convolution;
+		double ker[] { -1, 0, 1, };
+
+		convolution.SetKernel(ker, 3, 1);
+		convolution.DoConvolution(win, dX);
+
+		convolution.SetKernel(ker, 1, 3);
+		convolution.DoConvolution(win, dY);
+
+		//Tính đạo hàm tổng hợp
+		Mat mag = Mat(wrow, wcol, CV_64FC1, Scalar(0));
+		Mat the = Mat(wrow, wcol, CV_64FC1, Scalar(0));
+
+		double* dXdata = (double*)(dX.data);
+		double* dYdata = (double*)(dY.data);
+
+		double* magdata = (double*)(mag.data);
+		double* thedata = (double*)(the.data);
+
+		for (int i = 0; i < wrow; i++)
+			for (int j = 0; j < wcol; j++)
+			{
+				int center = i * wcol + j;
+
+				double dx = *(dXdata + center);
+				double dy = *(dYdata + center);
+
+				*(magdata + center) = sqrt(dx * dx + dy * dy);
+
+				double angle = 0;
+				if (dx == 0)
+				{
+					if (dy > 0)
+						angle = 90;
+					else if (dy < 0)
+						angle = 270;
+				}
+				else
+				{
+					angle = atan(dy / dx) * 180 / M_PI;
+
+					if (dx < 0)
+						angle += 180;
+
+					if (angle < 0)
+						angle += 360;
+				}
+				*(thedata + center) = angle;
+			}
+
+		//Làm trơn giá trị đạo hàm
+		mag = mag.mul(weights);
+
+		//Chia 36 bin hướng, tính histogram
+		vector<double> bin36(36, 0);
+
+		for (int i = 0; i < wrow; i++)
+			for (int j = 0; j < wcol; j++)
+			{
+				int center = i * wcol + j;
+
+				int bin = int(*(thedata + center) / 10);
+
+				bin36[bin] += *(magdata + center);
+			}
+
+		//Tìm hướng chính, gán cho keypoint
+		double maximum = -999;
+		int maxBin = -1;
+
+		for (int i = 0; i < 36; i++)
+			if (maximum < bin36[i])
+			{
+				maximum = bin36[i];
+				maxBin = i;
+			}
+
+		orientations[key] = maxBin;
+
+		//Xoay hướng keypoint về 0, tạo descriptor
+		the = the - maximum;
+
+		descriptor des(128);
+
+		for (int i = 0; i < wrow; i++)
+			for (int j = 0; j < wcol; j++)
+			{
+				int center = i * wcol + j;
+
+				double angle = *(thedata + center);
+				if (angle < 0)
+					angle += 360;
+
+				int bin = int(angle / 45);
+
+				//Vị trí của bin này trong des
+				int pos = (int(i / 4) * 4 + int(j / 4)) * 8 + bin;
+
+				des[pos] += *(magdata + center);
+				descriptors.push_back(des);
+			}
 	}
 
 	return 1;
