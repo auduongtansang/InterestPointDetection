@@ -5,18 +5,11 @@ using namespace cv;
 
 int main()
 {
-	Mat src = imread("butt.jpg", IMREAD_GRAYSCALE);
+	Mat src1 = imread("box.png", IMREAD_GRAYSCALE), src2 = imread("box_in_scene.png", IMREAD_GRAYSCALE);
 	Mat dst;
 
-	namedWindow("Source");
-	imshow("Source", src);
-
-	vector<keypoint> key;
-	vector<descriptor> des;
-
 	InterestPointDetection detector;
-	detector.detectDOG(src, dst, key, 1, sqrt(2), 0.005, 10);
-	detector.extractSIFT(src, key, des);
+	detector.matchBySIFT(src1, src2, dst);
 
 	namedWindow("Result");
 	imshow("Result", dst);

@@ -24,6 +24,8 @@ public:
 
 	int extractSIFT(const Mat& src, const vector<keypoint>& keypoints, vector<descriptor>& descriptors);
 
+	int matchBySIFT(const Mat& src1, const Mat& src2, Mat& dst);
+
 	InterestPointDetection();
 	~InterestPointDetection();
 };
