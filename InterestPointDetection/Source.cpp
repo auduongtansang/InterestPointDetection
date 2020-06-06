@@ -11,8 +11,10 @@ int main()
 	namedWindow("Source");
 	imshow("Source", src);
 
+	vector<keypoint> k;
+
 	InterestPointDetection detector;
-	detector.detectDOG(src, dst, 1, sqrt(2), 0.005, 10);
+	detector.detectDOG(src, dst, k, 1, sqrt(2), 0.005, 10);
 
 	namedWindow("Result");
 	imshow("Result", dst);

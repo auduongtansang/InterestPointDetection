@@ -198,7 +198,7 @@ int InterestPointDetection::detectBlob(const Mat& src, Mat& dst, double sigma, d
 	return 1;
 }
 
-int InterestPointDetection::detectDOG(const Mat& src, Mat& dst, double sigma, double coef, double cth, double eth)
+int InterestPointDetection::detectDOG(const Mat& src, Mat& dst, vector<keypoint> keypoints, double sigma, double coef, double cth, double eth)
 {
 	//Nếu ảnh input rỗng => không làm gì hết
 	if (src.empty())
@@ -249,7 +249,8 @@ int InterestPointDetection::detectDOG(const Mat& src, Mat& dst, double sigma, do
 			pow(temp, 2, DOG[oct][k]);
 		}
 
-	//Lọc cực trị cục bộ và hiển thị lên ảnh kết quả
+	//Định vị keypoint và hiển thị lên ảnh kết quả
+	keypoints.resize(0);
 	cvtColor(src, dst, COLOR_GRAY2BGR);
 
 	scaleRow = row * 2;
@@ -345,6 +346,9 @@ int InterestPointDetection::detectDOG(const Mat& src, Mat& dst, double sigma, do
 							{
 								int originalX = int(round(j * rescale));
 								int originalY = int(round(i * rescale));
+
+								keypoint key{ oct, k, i, j };
+								keypoints.push_back(key);
 
 								circle(dst, Point(originalX, originalY), int(ceil(sig[oct][k] * sqrt2 * rescale)), Scalar(0, 0, 255));
 							}
