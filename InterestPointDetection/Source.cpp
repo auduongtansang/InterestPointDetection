@@ -12,7 +12,7 @@ int main()
 	imshow("Source", src);
 
 	InterestPointDetection detector;
-	detector.detectBlob(src, dst, 1, sqrt(2), 0.03);
+	detector.detectDOG(src, dst, 1, sqrt(2), 0.005);
 
 	namedWindow("Result");
 	imshow("Result", dst);
