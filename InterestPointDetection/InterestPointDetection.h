@@ -12,7 +12,7 @@ public:
 
 	int detectBlob(const Mat& src, Mat& dst, double sigma, double coef, double th);
 
-	int detectDOG(const Mat& src, Mat& dst, double sigma, double coef, double th);
+	int detectDOG(const Mat& src, Mat& dst, double sigma, double coef, double cth, double eth);
 
 	InterestPointDetection();
 	~InterestPointDetection();
