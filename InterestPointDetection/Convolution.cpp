@@ -32,6 +32,35 @@ void Convolution::SetKernel(double k[], int row, int col)
 		*(data + i) = k[i];
 }
 
+void Convolution::SetScaleNormalizedLOG(double sigma)
+{
+	_row = int(ceil(sigma * 6));
+
+	if ((_row & 1) == 0)
+		_row += 1;
+
+	_col = _row;
+
+	//Bán kính kernel
+	int half = _row / 2;
+
+	//Hằng số
+	double sigma22 = sigma * sigma * 2;
+	double pisiama42 = pow(sigma, 4) * M_PI * 2;
+
+	_k = Mat(_row, _col, CV_64FC1, Scalar(0));
+	double* data = (double*)(_k.data);
+
+	for (int i = 0, ii = -half; i < _row; i++, ii++)
+		for (int j = 0, jj = -half; j < _col; j++, jj++)
+		{
+			int center = i * _col + j;
+
+			double ii2jj2 = (double)ii * ii + (double)jj * jj;
+			*(data + center) = (ii2jj2 - sigma22) * exp(-ii2jj2 / sigma22) / pisiama42;
+		}
+}
+
 int Convolution::DoConvolution(const Mat& src, Mat& dst)
 {
 	//Nếu ảnh input rỗng => không làm gì hết

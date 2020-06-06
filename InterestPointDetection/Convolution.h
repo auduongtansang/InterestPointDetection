@@ -23,6 +23,9 @@ public:
 	//Thiết lập kernel, số dòng và số cột phải là số lẻ
 	void SetKernel(double k[], int row, int col);
 
+	//Thiết lập kernel tỉ lệ chuẩn hóa LOG
+	void SetScaleNormalizedLOG(double sigma);
+
 	/*
 	Hàm tích chập của một ảnh xám với kernel hiện tại
 	src: ảnh input
