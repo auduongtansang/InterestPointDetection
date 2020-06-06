@@ -5,14 +5,11 @@ using namespace cv;
 
 int main()
 {
-	Mat src = imread("butt.jpg", IMREAD_GRAYSCALE);
+	Mat src1 = imread("box.png", IMREAD_GRAYSCALE), src2 = imread("box_in_scene.png", IMREAD_GRAYSCALE);
 	Mat dst;
 
-	namedWindow("Source");
-	imshow("Source", src);
-
 	InterestPointDetection detector;
-	detector.detectDOG(src, dst, 1, sqrt(2), 0.005, 10);
+	detector.matchBySIFT(src1, 1, sqrt(2), 0.005, 20, src2, 1, sqrt(2), 0.005, 20, 0.05, dst);
 
 	namedWindow("Result");
 	imshow("Result", dst);
