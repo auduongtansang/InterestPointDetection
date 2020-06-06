@@ -60,7 +60,7 @@ int main(int argc, char** args)
 	}
 	else if (strcmp(args[1], "dog") == 0)
 	{
-		if (argc < 6)
+		if (argc < 7)
 		{
 			cout << "Khong du tham so!\n";
 			return -1;
@@ -78,7 +78,7 @@ int main(int argc, char** args)
 		imshow("Source", src1);
 
 		vector<keypoint> keys;
-		detector.detectDOG(src1, dst, keys, stof(args[3]), stof(args[4]), stof(args[5]), stof(args[5]));
+		detector.detectDOG(src1, dst, keys, stof(args[3]), stof(args[4]), stof(args[5]), stof(args[6]));
 
 		namedWindow("Result");
 		imshow("Result", dst);
