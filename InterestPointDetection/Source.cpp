@@ -5,14 +5,14 @@ using namespace cv;
 
 int main()
 {
-	Mat src = imread("chess.jpg", IMREAD_GRAYSCALE);
+	Mat src = imread("butt.jpg", IMREAD_GRAYSCALE);
 	Mat dst;
 
 	namedWindow("Source");
 	imshow("Source", src);
 
 	InterestPointDetection detector;
-	detector.detectHarris(src, dst, 0.04, 0.001);
+	detector.detectBlob(src, dst, 1, sqrt(2), 0.03);
 
 	namedWindow("Result");
 	imshow("Result", dst);
