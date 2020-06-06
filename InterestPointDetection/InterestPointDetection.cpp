@@ -189,9 +189,123 @@ int InterestPointDetection::detectBlob(const Mat& src, Mat& dst, double sigma, d
 							}
 				}
 
+				//Phân ngưỡng cực trị
 				if ((isMaximum || isMinimum) && value > th)
 					circle(dst, Point(j, i), sqrt2sig[k], Scalar(0, 0, 255));
 			}
+	}
+
+	return 1;
+}
+
+int InterestPointDetection::detectDOG(const Mat& src, Mat& dst, double sigma, double coef, double th)
+{
+	//Nếu ảnh input rỗng => không làm gì hết
+	if (src.empty())
+		return -1;
+
+	int row = src.rows, col = src.cols;
+
+	//Chuẩn hóa [0, 1]
+	Mat norm;
+	src.convertTo(norm, CV_64FC1, 1.0 / 255);
+
+	//Tạo các giá trị sigma cho mỗi tỉ lệ tại mỗi octave
+	double sig[5][5];
+	sig[0][0] = sigma;
+
+	for (int k = 1; k < 5; k++)
+		sig[0][k] = sig[0][k - 1] * coef;
+
+	double coef2 = coef * coef;
+	for (int oct = 1; oct < 5; oct++)
+		for (int k = 0; k < 5; k++)
+			sig[oct][k] = sig[oct - 1][k] * coef2;
+
+	//Tạo không gian tỉ lệ Gaussian
+	Mat Gaussian[5][5];
+	int scaleRow = row * 2, scaleCol = col * 2;
+
+	for (int oct = 0; oct < 5; oct++)
+	{
+		Mat scale;
+		resize(norm, scale, Size(scaleCol, scaleRow));
+
+		for (int k = 0; k < 5; k++)
+			GaussianBlur(scale, Gaussian[oct][k], Size(0, 0), sig[oct][k]);
+
+		scaleRow = int(round(scaleRow * 0.5));
+		scaleCol = int(round(scaleCol * 0.5));
+	}
+
+	//Tạo không gian tỉ lệ DOG
+	Mat DOG[5][4];
+
+	for (int oct = 0; oct < 5; oct++)
+		for (int k = 0; k < 4; k++)
+		{
+			Mat temp = Gaussian[oct][k + 1] - Gaussian[oct][k];
+
+			pow(temp, 2, DOG[oct][k]);
+		}
+
+	//Lọc cực trị cục bộ và hiển thị lên ảnh kết quả
+	cvtColor(src, dst, COLOR_GRAY2BGR);
+
+	scaleRow = row * 2;
+	scaleCol = col * 2;
+
+	double sqrt2 = sqrt(2);
+	double rescale = 0.5;
+
+	for (int oct = 0; oct < 5; oct++)
+	{
+		for (int k = 1; k < 3; k++)
+		{
+			double* DOGkdata = (double*)(DOG[oct][k].data);
+
+			for (int i = 1; i < scaleRow - 1; i++)
+				for (int j = 1; j < scaleCol - 1; j++)
+				{
+					int center = i * scaleCol + j;
+
+					double value = *(DOGkdata + center);
+					bool isMaximum = true, isMinimum = true;
+
+					for (int t = -1; t <= 1; t++)
+					{
+						double* DOGtdata = (double*)(DOG[oct][k + t].data);
+
+						for (int u = -1; u <= 1; u++)
+							for (int v = -1; v <= 1; v++)
+								if (t != 0 || u != 0 || v != 0)
+								{
+									int cur = center + u * scaleCol + v;
+									double neighbor = *(DOGtdata + cur);
+
+									if (value < neighbor)
+										isMaximum = false;
+
+									if (value > neighbor)
+										isMinimum = false;
+								}
+					}
+
+					//Phân ngưỡng cực trị
+					if ((isMaximum || isMinimum) && value > th)
+					{
+						int originalX = int(round(j * rescale));
+						int originalY = int(round(i * rescale));
+
+						circle(dst, Point(originalX, originalY), int(ceil(sig[oct][k] * sqrt2 * rescale)), Scalar(0, 0, 255));
+					}
+
+				}
+		}
+
+		scaleRow = int(round(scaleRow * 0.5));
+		scaleCol = int(round(scaleCol * 0.5));
+		rescale *= 2;
 	}
 
 	return 1;
