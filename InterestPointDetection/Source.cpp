@@ -9,7 +9,7 @@ int main()
 	Mat dst;
 
 	InterestPointDetection detector;
-	detector.matchBySIFT(src1, src2, dst);
+	detector.matchBySIFT(src1, 1, sqrt(2), 0.005, 20, src2, 1, sqrt(2), 0.005, 20, 0.05, dst);
 
 	namedWindow("Result");
 	imshow("Result", dst);

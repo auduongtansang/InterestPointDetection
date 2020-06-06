@@ -292,7 +292,6 @@ int InterestPointDetection::detectDOG(const Mat& src, Mat& dst, vector<keypoint>
 								}
 					}
 
-					//Phân ngưỡng cực trị
 					if (isMaximum || isMinimum)
 					{
 						//Khai triển Taylor xung quanh cực trị ứng viên
@@ -327,7 +326,7 @@ int InterestPointDetection::detectDOG(const Mat& src, Mat& dst, vector<keypoint>
 						*(DXXdata + 7) -= *(DOGbdata + center + scaleCol) + *(DOGbdata + center - scaleCol);
 						*(DXXdata + 5) = *(DXXdata + 7);
 
-						//Điểm cực trị của hàm DOG(x, y, sig) xung quanh cực trị ứng viên
+						//Điểm cực trị thực sự của hàm DOG(x, y, sig)
 						Mat X = -DXX.inv() * DX; 
 
 						//Giá trị cực trị
@@ -372,145 +371,111 @@ int InterestPointDetection::extractSIFT(const Mat& src, const vector<keypoint>& 
 	if (src.empty())
 		return -1;
 
+	int row = src.rows, col = src.cols;
+
+	//Tạo descriptor cho mỗi keypoint
 	int num = int(keypoints.size());
 	descriptors.resize(0);
+
+	double k[] { -1, 0, 1 };
+	Mat kX = Mat(1, 3, CV_64FC1, k);
+	Mat kY = Mat(3, 1, CV_64FC1, k);
 
 	for (int key = 0; key < num; key++)
 	{
 		int oct = int(round(keypoints[key][0]));
 		double sig = keypoints[key][1];
-		int y = int(round(keypoints[key][2]));
-		int x = int(round(keypoints[key][3]));
+		int ii = int(round(keypoints[key][2]));
+		int jj = int(round(keypoints[key][3]));
+
+		double factor = pow(2, -oct + 1);
+		int scaleRow = int(round(row * factor)), scaleCol = int(round(col * factor));
 
 		//Tạo ảnh Gaussian tại tỉ lệ cực đại của keypoint
 		Mat scale, Gaussian;
-		resize(src, scale, Size(int(round(src.cols * pow(2, -oct + 1))), int(round(src.rows * pow(2, -oct + 1)))));
+		resize(src, scale, Size(scaleCol, scaleRow));
 		GaussianBlur(scale, Gaussian, Size(0, 0), sig);
 
 		//Lấy vùng ảnh xung quanh keypoint
-		int minRow = max(0, y - 8);
-		int maxRow = min(Gaussian.rows - 1, y + 8);
-		int minCol = max(0, x - 8);
-		int maxCol = min(Gaussian.cols - 1, x + 8);
+		int minRow = max(0, ii - 8);
+		int maxRow = min(scaleRow - 1, ii + 8);
+		int minCol = max(0, jj - 8);
+		int maxCol = min(scaleCol - 1, jj + 8);
 		
 		Mat win = Gaussian(Range(minRow, maxRow), Range(minCol, maxCol));
-		int wrow = win.rows, wcol = win.cols;
+		int winRow = win.rows, winCol = win.cols;
 
 		//Tạo ma trận trọng số
-		Mat weights = getGaussianKernel(wrow, 1.5 * sig) * getGaussianKernel(wcol, 1.5 * sig).t();
+		Mat weights = getGaussianKernel(winRow, 1.5 * sig) * getGaussianKernel(winCol, 1.5 * sig).t();
 
 		//Tính đạo hàm theo phương
 		Mat dX, dY;
 
-		Convolution convolution;
-		double ker[] { -1, 0, 1, };
+		filter2D(win, dX, CV_64FC1, kX);
+		filter2D(win, dY, CV_64FC1, kY);
 
-		convolution.SetKernel(ker, 3, 1);
-		convolution.DoConvolution(win, dX);
-
-		convolution.SetKernel(ker, 1, 3);
-		convolution.DoConvolution(win, dY);
-
-		//Tính đạo hàm tổng hợp và hướng
-		Mat mag = Mat(wrow, wcol, CV_64FC1, Scalar(0));
-		Mat the = Mat(wrow, wcol, CV_64FC1, Scalar(0));
+		Mat mag, ang;
+		cartToPolar(dX, dY, mag, ang, true);
 
 		double* dXdata = (double*)(dX.data);
-		double* dYdata = (double*)(dY.data);
-
 		double* magdata = (double*)(mag.data);
-		double* thedata = (double*)(the.data);
-
-		for (int i = 0; i < wrow; i++)
-			for (int j = 0; j < wcol; j++)
-			{
-				int center = i * wcol + j;
-
-				double dx = *(dXdata + center);
-				double dy = *(dYdata + center);
-
-				*(magdata + center) = sqrt(dx * dx + dy * dy);
-
-				double angle = 0;
-				if (dx == 0)
-				{
-					if (dy > 0)
-						angle = 90;
-					else if (dy < 0)
-						angle = 270;
-				}
-				else
-				{
-					angle = atan(dy / dx) * 180 / M_PI;
-
-					if (dx < 0)
-						angle += 180;
-
-					if (angle < 0)
-						angle += 360;
-				}
-				*(thedata + center) = angle;
-			}
+		double* angdata = (double*)(ang.data);
 
 		//Làm trơn giá trị đạo hàm tổng hợp
 		mag = mag.mul(weights);
 
-		//Chia 36 bin hướng, tính histogram
+		//Chia 36 bin hướng, tính histogram, tìm hướng chính
 		vector<double> bin36(36, 0);
+		double max = -99999;
+		double argmax = 0;
 
-		for (int i = 0; i < wrow; i++)
-			for (int j = 0; j < wcol; j++)
+		for (int i = 0; i < winRow; i++)
+			for (int j = 0; j < winCol; j++)
 			{
-				int center = i * wcol + j;
+				int center = i * winCol + j;
 
-				int bin = int(*(thedata + center) / 10);
+				double angle = *(angdata + center);
 
+				int bin = int(angle / 10);
 				bin36[bin] += *(magdata + center);
+
+				if (max < bin36[bin])
+				{
+					max = bin36[bin];
+					argmax = angle;
+				}
 			}
 
-		//Tìm hướng chính, gán cho keypoint
-		double maximum = -999;
-		int maxBin = -1;
-
-		for (int i = 0; i < 36; i++)
-			if (maximum < bin36[i])
-			{
-				maximum = bin36[i];
-				maxBin = i;
-			}
-
-		//Xoay hướng keypoint về 0, tạo descriptor
-		the = the - maxBin;
-
+		//Xoay cho keypoint hướng về 0, chia 8 bin hướng, tạo descriptor
+		ang = ang - argmax;
 		descriptor des(128, 0);
 
-		for (int i = 0; i < wrow; i++)
-			for (int j = 0; j < wcol; j++)
+		for (int i = 0; i < winRow; i++)
+			for (int j = 0; j < winCol; j++)
 			{
-				int center = i * wcol + j;
+				int center = i * winCol + j;
 
-				double angle = *(thedata + center);
+				double angle = *(angdata + center);
 				if (angle < 0)
 					angle += 360;
 
 				int bin = int(angle / 45);
 
-				//Vị trí của bin này trong des
 				int pos = (int(i / 4) * 4 + int(j / 4)) * 8 + bin;
 
 				des[pos] += *(magdata + center);
 			}
 
 		//Chuẩn hóa
-		double length = 0;
+		double lengthinv = 0;
 
 		for (int i = 0; i < 128; i++)
-			length += des[i] * des[i];
+			lengthinv += des[i] * des[i];
 
-		length = sqrt(length);
+		lengthinv = 1.0 / sqrt(lengthinv);
 
 		for (int i = 0; i < 128; i++)
-			des[i] /= length;
+			des[i] *= lengthinv;
 
 		descriptors.push_back(des);
 	}
@@ -518,7 +483,7 @@ int InterestPointDetection::extractSIFT(const Mat& src, const vector<keypoint>& 
 	return 1;
 }
 
-int InterestPointDetection::matchBySIFT(const Mat& src1, const Mat& src2, Mat& dst)
+int InterestPointDetection::matchBySIFT(const Mat& src1, double sigma1, double coef1, double cth1, double eth1, const Mat& src2, double sigma2, double coef2, double cth2, double eth2, double dth, Mat& dst)
 {
 	//Nếu ảnh input rỗng => không làm gì hết
 	if (src1.empty() || src2.empty())
@@ -528,16 +493,16 @@ int InterestPointDetection::matchBySIFT(const Mat& src1, const Mat& src2, Mat& d
 	vector<keypoint> key1, key2;
 	vector<descriptor> des1, des2;
 
-	//Tìm keypoint
-	detectDOG(src1, dst1, key1, 1, sqrt(2), 0.005, 20);
-	detectDOG(src2, dst2, key2, 1, sqrt(2), 0.007, 20);
+	//Định vị keypoint
+	detectDOG(src1, dst1, key1, sigma1, coef1, cth1, eth1);
+	detectDOG(src2, dst2, key2, sigma2, coef2, cth2, eth2);
 
 	//Tạo descriptor cho mỗi keypoint
 	extractSIFT(src1, key1, des1);
 	extractSIFT(src2, key2, des2);
 
 	//Hiển thị ảnh kết quả
-	dst = Mat(dst2.rows, dst1.cols + dst2.cols, CV_8UC3, Scalar(0));
+	dst = Mat(max(dst1.rows, dst2.rows), dst1.cols + dst2.cols, CV_8UC3, Scalar(0));
 	dst1.copyTo(dst(Rect(0, 0, dst1.cols, dst1.rows)));
 	dst2.copyTo(dst(Rect(dst1.cols, 0, dst2.cols, dst2.rows)));
 
@@ -560,7 +525,7 @@ int InterestPointDetection::matchBySIFT(const Mat& src1, const Mat& src2, Mat& d
 		}
 
 		//Phân ngưỡng khoảng cách
-		if (min <= 0.1)
+		if (min <= dth)
 		{
 			int x1 = int(round(key1[i][3] * pow(2, key1[i][0] - 1)));
 			int y1 = int(round(key1[i][2] * pow(2, key1[i][0] - 1)));
