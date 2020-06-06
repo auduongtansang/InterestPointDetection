@@ -198,7 +198,7 @@ int InterestPointDetection::detectBlob(const Mat& src, Mat& dst, double sigma, d
 	return 1;
 }
 
-int InterestPointDetection::detectDOG(const Mat& src, Mat& dst, double sigma, double coef, double th)
+int InterestPointDetection::detectDOG(const Mat& src, Mat& dst, double sigma, double coef, double cth, double eth)
 {
 	//Nếu ảnh input rỗng => không làm gì hết
 	if (src.empty())
@@ -292,12 +292,63 @@ int InterestPointDetection::detectDOG(const Mat& src, Mat& dst, double sigma, do
 					}
 
 					//Phân ngưỡng cực trị
-					if ((isMaximum || isMinimum) && value > th)
+					if (isMaximum || isMinimum)
 					{
-						int originalX = int(round(j * rescale));
-						int originalY = int(round(i * rescale));
+						//Khai triển Taylor xung quanh cực trị ứng viên
+						double* DOGadata = (double*)(DOG[oct][k + 1].data);
+						double* DOGbdata = (double*)(DOG[oct][k - 1].data);
 
-						circle(dst, Point(originalX, originalY), int(ceil(sig[oct][k] * sqrt2 * rescale)), Scalar(0, 0, 255));
+						//Đạo hàm bậc 1 của hàm DOG(x, y, sig)
+						Mat DX = Mat(3, 1, CV_64FC1);
+						double* DXdata = (double*)(DX.data);
+
+						*(DXdata) = *(DOGkdata + center + 1) - *(DOGkdata + center - 1);
+						*(DXdata + 1) = *(DOGkdata + center + scaleCol) - *(DOGkdata + center - scaleCol);
+						*(DXdata + 2) = *(DOGadata + center) - *(DOGbdata + center);
+
+						//Đạo hàm bậc 2 của hàm DOG(x, y, sig)
+						Mat DXX = Mat(3, 3, CV_64FC1);
+						double* DXXdata = (double*)(DXX.data);
+
+						*(DXXdata) = *(DOGkdata + center + 1) + *(DOGkdata + center - 1) - 2 * *(DOGkdata + center);
+						*(DXXdata + 4) = *(DOGkdata + center + scaleCol) + *(DOGkdata + center - scaleCol) - 2 * *(DOGkdata + center);
+						*(DXXdata + 8) = *(DOGadata + center) + *(DOGbdata + center) - 2 * *(DOGkdata + center);
+
+						*(DXXdata + 3) = *(DOGkdata + center + scaleCol + 1) + *(DOGkdata + center - scaleCol - 1);
+						*(DXXdata + 3) -= *(DOGkdata + center - scaleCol + 1) + *(DOGkdata + center + scaleCol - 1);
+						*(DXXdata + 1) = *(DXXdata + 3);
+
+						*(DXXdata + 6) = *(DOGadata + center + 1) + *(DOGadata + center - 1);
+						*(DXXdata + 6) -= *(DOGbdata + center + 1) + *(DOGbdata + center - 1);
+						*(DXXdata + 2) = *(DXXdata + 6);
+
+						*(DXXdata + 7) = *(DOGadata + center + scaleCol) + *(DOGadata + center - scaleCol);
+						*(DXXdata + 7) -= *(DOGbdata + center + scaleCol) + *(DOGbdata + center - scaleCol);
+						*(DXXdata + 5) = *(DXXdata + 7);
+
+						//Điểm cực trị của hàm DOG(x, y, sig) xung quanh cực trị ứng viên
+						Mat X = -DXX.inv() * DX; 
+
+						//Giá trị cực trị
+						Mat expr = 0.5 * DX.t() * X;
+						double extrema = value + *(double*)(expr.data);
+
+						//Chỉ giữ lại những cực trị có độ tương phản cao
+						if (extrema > cth)
+						{
+							//Xấp xỉ tỉ lệ hai trị riêng
+							double eRatio = (*(DXXdata) + *(DXXdata + 4)) * (*(DXXdata) + *(DXXdata + 4));
+							eRatio /= *(DXXdata) * *(DXXdata + 4) - *(DXXdata + 1) * *(DXXdata + 1);
+
+							//Chỉ giữ lại những cực trị không nằm trên biên cạnh
+							if (eRatio < (eth + 1) * (eth + 1) / eth)
+							{
+								int originalX = int(round(j * rescale));
+								int originalY = int(round(i * rescale));
+
+								circle(dst, Point(originalX, originalY), int(ceil(sig[oct][k] * sqrt2 * rescale)), Scalar(0, 0, 255));
+							}
+						}
 					}
 
 				}
